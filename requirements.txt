@@ -1,0 +1,15 @@
+streamlit
+torch
+torchvision
+torchaudio
+transformers
+Pillow
+SpeechRecognition
+pocketsphinx
+python-dotenv
+openai-whisper
+timm
+numpy
+opencv-python
+scikit-learn
+seaborn

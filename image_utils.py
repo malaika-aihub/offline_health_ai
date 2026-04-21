@@ -6,8 +6,6 @@ from PIL import Image
 from torchvision import transforms
 import pandas as pd
 import os, sys
-from PIL import Image
-import numpy as np
 try:
     import cv2
 except Exception:

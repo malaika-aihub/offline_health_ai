@@ -1,341 +1,211 @@
 
-# import tempfile
-# import os
-# import re
-# import whisper
 
-# # =====================================================
-# # FFmpeg PATH FIX
-# # =====================================================
-# os.environ["PATH"] += os.pathsep + r"C:\Users\MASTER\Downloads\ffmpeg\bin"
-
-# # =====================================================
-# # LOAD WHISPER MODEL
-# # =====================================================
-# model = whisper.load_model("base")
-
-# # =====================================================
-# # KEYWORDS (skin detection)
-# # =====================================================
-# skin_keywords = [
-#     "itching", "rash", "spots", "lesion",
-#     "skin", "mole", "burning", "acne"
-# ]
-
-# def is_skin_related(text):
-#     text = text.lower()
-#     return any(word in text for word in skin_keywords)
-
-# # =====================================================
-# # SPELLING FIX MAP
-# # =====================================================
-# replacements = {
-#     "eaching": "itching",
-#     "eating": "itching",
-#     "burningg": "burning",
-#     "rassh": "rash",
-#     "rashh": "rash",
-#     "precious": "",
-#     "pleaes": "please",
-#     "plese": "please"
-# }
-
-# # =====================================================
-# # CLEAN TEXT
-# # =====================================================
-# def clean_text(text):
-#     text = text.lower()
-#     text = re.sub(r"[^a-zA-Z\s]", "", text)
-
-#     for wrong, correct in replacements.items():
-#         text = text.replace(wrong, correct)
-
-#     return text.strip()
-
-# # =====================================================
-# # GEMMA FUNCTION (SAFE MODE)
-# # =====================================================
-# def call_gemma(text):
-
-#     if len(text.split()) < 3:
-#         return "Uncertain: please provide clear symptoms or upload image."
-
-#     if not is_skin_related(text):
-#         return "Uncertain: not a skin-related symptom."
-
-#     prompt = f"""
-# You are a STRICT skin health assistant.
-
-# User symptoms: {text}
-
-# Return ONLY:
-# CAUSE:
-# SAFETY:
-# ADVICE:
-# IMAGE:
-# """
-
-    
-#     # currently placeholder output
-#     response = f"""CAUSE: Skin irritation
-# SAFETY:
-# - Avoid scratching
-# - Keep skin clean
-# - Use mild soap 
-# - ADVICE: Maintain hygiene  
-# - IMAGE: Upload image for better analysis"""
-
-#     return response
-
-# # =====================================================
-# # VOICE PROCESSING
-# # =====================================================
-# def process_voice(audio_file):
-
-#     with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
-#         tmp.write(audio_file.read())
-#         tmp_path = tmp.name
-
-#     try:
-#         audio_file.seek(0)
-
-#         # Whisper STT
-#         result = model.transcribe(tmp_path)
-#         raw_text = result["text"].strip()
-
-#         # Clean text
-#         cleaned_text = clean_text(raw_text)
-
-#         # Gemma response
-#         gemma_output = call_gemma(cleaned_text)
-
-#         return cleaned_text, gemma_output
-
-#     finally:
-#         if os.path.exists(tmp_path):
-#             os.remove(tmp_path)
-
-
-
-import tempfile
-import os
 import re
-import whisper
-import torch
+import speech_recognition as sr
 
-
-# =====================================================
-# FFmpeg PATH FIX
-# =====================================================
-os.environ["PATH"] += os.pathsep + r"C:\Users\MASTER\Downloads\ffmpeg\bin"
-
-# =====================================================
-# WHISPER LOAD
-# =====================================================
-model = whisper.load_model("base")
-
-# =====================================================
-# IMPORT EXISTING GEMMA PIPELINE (NO NEW MODEL LOAD)
-# =====================================================
-from text_utils import process_text
-
-
-# =====================================================
-# SPELLING FIX MAP
-# =====================================================
-replacements = {
-    "eaching": "itching",
-    "eating": "itching",
-    "burningg": "burning",
-    "rassh": "rash",
-    "rashh": "rash",
-    "pleaes": "please",
-    "plese": "please"
-}
-
-# =====================================================
+# ------------------------
 # CLEAN TEXT
-# =====================================================
+# ------------------------
 def clean_text(text):
     text = text.lower()
-
-    for wrong, correct in replacements.items():
-        text = text.replace(wrong, correct)
-
     text = re.sub(r"[^a-zA-Z\s]", "", text)
     text = re.sub(r"\s+", " ", text).strip()
-
     return text
 
 
-# =====================================================
-# VOICE PROCESSING
-# =====================================================
-def process_voice(audio_file):
+# ------------------------
+# COMPLETE SKIN RULE BASE
+# ------------------------
+SKIN_RULES = [
+    {
+        "disease": "Allergic Dermatitis",
+        "symptoms": ["itching", "rash", "redness", "swelling"],
+        "confidence": 0.85,
+        "advice": "Avoid allergens, use antihistamine cream, keep skin clean."
+    },
+    {
+        "disease": "Eczema (Atopic Dermatitis)",
+        "symptoms": ["itching", "dry skin", "red patches", "cracking"],
+        "confidence": 0.90,
+        "advice": "Moisturize regularly, avoid hot water, use mild steroid cream."
+    },
+    {
+        "disease": "Fungal Infection (Tinea)",
+        "symptoms": ["itching", "ring shaped rash", "scaling", "red patches"],
+        "confidence": 0.88,
+        "advice": "Keep area dry, use antifungal cream, avoid sharing clothes/towels."
+    },
+    {
+        "disease": "Psoriasis",
+        "symptoms": ["thick skin", "scaling", "red patches", "itching"],
+        "confidence": 0.92,
+        "advice": "Moisturize skin, avoid stress, consult dermatologist."
+    },
+    {
+        "disease": "Acne Vulgaris",
+        "symptoms": ["pimples", "oily skin", "whiteheads", "blackheads"],
+        "confidence": 0.93,
+        "advice": "Wash face twice daily, avoid oily food, use salicylic acid."
+    },
+    {
+        "disease": "Heat Rash",
+        "symptoms": ["itching", "small red bumps", "sweating", "irritation"],
+        "confidence": 0.80,
+        "advice": "Stay cool, wear loose clothes, keep skin dry."
+    },
 
-    tmp_path = None
+    # ------------------------ PRE-CANCER ------------------------
+    {
+        "disease": "Actinic Keratosis (Pre-cancer)",
+        "symptoms": ["rough scaly patch", "sun damaged skin", "dry crusted lesion"],
+        "confidence": 0.93,
+        "advice": "⚠️ Pre-cancer warning: Consult dermatologist immediately."
+    },
+    {
+        "disease": "Bowen’s Disease (Early Skin Cancer)",
+        "symptoms": ["red scaly patch", "non healing lesion", "slow growing patch"],
+        "confidence": 0.94,
+        "advice": "⚠️ Early cancer: Medical evaluation required."
+    },
+
+    # ------------------------SKIN CANCERS ------------------------
+    {
+        "disease": "Basal Cell Carcinoma (BCC)",
+        "symptoms": ["pearly bump", "non healing sore", "pink patch"],
+        "confidence": 0.95,
+        "advice": "🚨 Cancer: Dermatologist treatment required."
+    },
+    {
+        "disease": "Squamous Cell Carcinoma (SCC)",
+        "symptoms": ["red firm bump", "scaly patch", "bleeding wound"],
+        "confidence": 0.95,
+        "advice": "🚨 High risk cancer: Immediate medical attention needed."
+    },
+    {
+        "disease": "Melanoma",
+        "symptoms": ["irregular mole", "changing mole", "black patch", "asymmetry mole"],
+        "confidence": 0.98,
+        "advice": "🚨 EMERGENCY: Possible melanoma. Immediate doctor visit."
+    },
+    {
+        "disease": "Merkel Cell Carcinoma",
+        "symptoms": ["fast growing lump", "painless nodule", "red purple bump"],
+        "confidence": 0.97,
+        "advice": "🚨 Rare aggressive cancer: Immediate hospital required."
+    }
+]
+
+
+# ------------------------
+# RULE ENGINE
+# ------------------------
+def rule_engine(user_text):
+
+    user_text = clean_text(user_text)
+
+    best_match = None
+    best_score = 0
+
+    for rule in SKIN_RULES:
+
+        match_count = 0
+
+        for sym in rule["symptoms"]:
+
+            score = 0
+
+            # exact match (strong)
+            if sym in user_text:
+                score = 1
+
+            # word match (weak)
+            elif len(set(user_text.split()) & set(sym.split())) > 0:
+                score = 0.5
+
+            match_count += score
+
+        # normalize score
+        final_score = match_count / len(rule["symptoms"])
+
+        if final_score > best_score:
+            best_score = final_score
+            best_match = rule
+
+    if best_match is None or best_score == 0:
+        return {
+            "disease": "Unknown / Mild Skin Condition",
+            "confidence": 0.40,
+            "advice": "Monitor symptoms and consult doctor if needed."
+        }
+
+    return {
+        "disease": best_match["disease"],
+        "confidence": round(best_score, 2),
+        "advice": best_match["advice"]
+    }
+
+#------------------------
+# VOICE TO TEXT (MIC FUNCTION)
+#------------------------
+import speech_recognition as sr
+
+def voice_to_text(audio_file):
+
+    r = sr.Recognizer()
 
     try:
-        # Save audio temporarily
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
-            tmp.write(audio_file.read())
-            tmp_path = tmp.name
+        with sr.AudioFile(audio_file) as source:
+            audio = r.record(source)
 
-        audio_file.seek(0)
+        text = r.recognize_google(audio)
+        return text
 
-        # Whisper transcription
-        result = model.transcribe(tmp_path)
-        raw_text = result.get("text", "").strip()
-
-        print("🧾 Whisper Output:", raw_text)
-
-        # Clean text
-        cleaned_text = clean_text(raw_text)
-
-        print("🧹 Cleaned Text:", cleaned_text)
-
-        # =====================================================
-        # SEND TO EXISTING GEMMA PIPELINE (text_utils.py)
-        # =====================================================
-        gemma_response = process_text(cleaned_text)
-
-        return cleaned_text, gemma_response
-
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            os.remove(tmp_path)
+    except:
+        return "Sorry, could not understand audio"
 
 
+# ------------------------
+# FORMAT OUTPUT
+# ------------------------
+def format_response(result):
+
+    confidence = result["confidence"] * 100
+
+    if confidence >= 85:
+        level = "🔴 High Confidence"
+    elif confidence >= 60:
+        level = "🟠 Medium Confidence"
+    else:
+        level = "🟡 Low Confidence"
+
+    return f"""
+🧠 Disease Prediction: {result['disease']}
+
+📊 Confidence: {confidence:.1f}% ({level})
+
+💡 Medical Advice:
+{result['advice']}
+"""
 
 
+# ------------------------
+# MAIN PIPELINE (VOICE + RULE ENGINE)
+#------------------------
+def run_voice_pipeline():
+
+    # 🎤 Step 1: Voice input
+    text = voice_to_text()
+
+    # 🧠 Step 2: Rule engine
+    result = rule_engine(text)
+
+    # 📊 Step 3: formatted output
+    return format_response(result)
 
 
-
-
-
-
-
-# import tempfile
-# import os
-# import re
-# import whisper
-# import pyttsx3
-
-# # =====================================================
-# # FFmpeg PATH FIX
-# # =====================================================
-# os.environ["PATH"] += os.pathsep + r"C:\Users\MASTER\Downloads\ffmpeg\bin"
-
-# # =====================================================
-# # WHISPER (LOAD ONCE ONLY)
-# # =====================================================
-# model = whisper.load_model("base")
-
-# # =====================================================
-# # GEMMA PIPELINE
-# # =====================================================
-# from text_utils import process_text
-
-# # =====================================================
-# # SINGLE TTS ENGINE (IMPORTANT FIX)
-# # =====================================================
-# tts_engine = pyttsx3.init()
-# tts_engine.setProperty('rate', 170)
-
-# # =====================================================
-# # SPELL FIX
-# # =====================================================
-# replacements = {
-#     "eaching": "itching",
-#     "eating": "itching",
-#     "burningg": "burning",
-#     "rassh": "rash",
-#     "rashh": "rash",
-#     "pleaes": "please",
-#     "plese": "please"
-# }
-
-# # =====================================================
-# # CLEAN TEXT
-# # =====================================================
-# def clean_text(text):
-#     text = text.lower()
-
-#     for wrong, correct in replacements.items():
-#         text = text.replace(wrong, correct)
-
-#     text = re.sub(r"[^a-zA-Z\s]", "", text)
-#     text = re.sub(r"\s+", " ", text).strip()
-
-#     return text
-
-# # =====================================================
-# # SPEAK (STABLE FIX)
-# # =====================================================
-# def speak(text):
-#     try:
-#         if not text:
-#             return
-
-#         tts_engine.stop()          # 🔥 important reset
-#         tts_engine.say(text)
-#         tts_engine.runAndWait()
-
-#     except Exception as e:
-#         print("TTS Error:", e)
-
-# # =====================================================
-# # MAIN PIPELINE
-# # =====================================================
-# def process_voice(audio_file, voice_only=True):
-
-#     tmp_path = None
-
-#     try:
-#         # -----------------------------
-#         # SAVE AUDIO SAFELY
-#         # -----------------------------
-#         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
-#             tmp.write(audio_file.read())
-#             tmp_path = tmp.name
-
-#         audio_file.seek(0)
-
-#         # -----------------------------
-#         # WHISPER TRANSCRIPTION
-#         # -----------------------------
-#         result = model.transcribe(tmp_path)
-#         raw_text = result.get("text", "").strip()
-
-#         print("🧾 Whisper:", raw_text)
-
-#         # -----------------------------
-#         # CLEAN
-#         # -----------------------------
-#         cleaned_text = clean_text(raw_text)
-
-#         print("🧹 Clean:", cleaned_text)
-
-#         # -----------------------------
-#         # GEMMA OUTPUT
-#         # -----------------------------
-#         gemma_response = process_text(cleaned_text)
-
-#         print("🤖 Gemma OK")
-
-#         # -----------------------------
-#         # VOICE OUTPUT (FIXED)
-#         # -----------------------------
-#         speak(gemma_response)
-
-#         # -----------------------------
-#         # RETURN CONTROL
-#         # -----------------------------
-#         if voice_only:
-#             return None, None
-#         else:
-#             return cleaned_text, gemma_response
-
-#     finally:
-#         if tmp_path and os.path.exists(tmp_path):
-#             os.remove(tmp_path)
+# ------------------------
+# TEXT INPUT SUPPORT (optional)
+#------------------------
+def process_input(text):
+    result = rule_engine(text)
+    return format_response(result)

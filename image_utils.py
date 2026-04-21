@@ -8,7 +8,9 @@ from torchvision import transforms
 import pandas as pd
 import os, sys
 
-
+#------------------------
+# RESOURCE PATH (for deployment safety)
+# ------------------------
 def resource_path(relative_path):
     try:
         base_path = sys._MEIPASS
@@ -16,34 +18,34 @@ def resource_path(relative_path):
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
 
-# =====================================================
+# ------------------------
 # DEVICE
-# =====================================================
+# ------------------------
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# =====================================================
-# LOAD LABELS
-# =====================================================
+# ------------------------
+# LABELS
+#------------------------
 labels = list(np.load(resource_path("labels_focal.npy"), allow_pickle=True))
 
-# =====================================================
-# LOAD MODEL
-# =====================================================
+# ------------------------
+# MODEL LOAD
+# ------------------------
 model = timm.create_model(
     "efficientnet_b0",
     pretrained=False,
     num_classes=len(labels)
 )
 
-model.load_state_dict(torch.load(resource_path
-("best_model_focal.pth"),
-map_location=device))
+model.load_state_dict(torch.load(resource_path("best_model_focal.pth"),
+                                 map_location=device))
+
 model.to(device)
 model.eval()
 
-# =====================================================
-# TRANSFORM (must match training)
-# =====================================================
+#------------------------
+# TRANSFORM
+# ------------------------
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
@@ -53,9 +55,9 @@ transform = transforms.Compose([
     )
 ])
 
-# =====================================================
-# LOAD METADATA (OPTIONAL - for testing only)
-# =====================================================
+# ------------------------
+# DATASET (optional)
+#------------------------
 df = pd.read_csv("data/raw/HAM10000_metadata.csv")
 
 def get_true_label(image_id):
@@ -64,9 +66,64 @@ def get_true_label(image_id):
         return match['dx'].values[0]
     return None
 
-# =====================================================
-# SIMPLE PREDICTION FUNCTION
-# =====================================================
+
+# ------------------------
+# 🧠 DISEASE KNOWLEDGE BASE (RULE LAYER)
+# ------------------------
+SKIN_KNOWLEDGE = {
+    "nv": {
+        "name": "Melanocytic Nevi (Normal Mole)",
+        "type": "🟢 Benign",
+        "symptoms": ["Small mole", "Stable size", "No pain", "No bleeding"],
+        "advice": "Usually harmless. Monitor for changes."
+    },
+
+    "mel": {
+        "name": "Melanoma",
+        "type": "🔴 Skin Cancer (Dangerous)",
+        "symptoms": ["Irregular mole", "Changing color", "Asymmetry", "Dark patch"],
+        "advice": "🚨 URGENT: Immediate dermatologist consultation required."
+    },
+
+    "bcc": {
+        "name": "Basal Cell Carcinoma",
+        "type": "🔴 Skin Cancer",
+        "symptoms": ["Pearly bump", "Non-healing sore", "Bleeding lesion"],
+        "advice": "Medical treatment required. Slow but destructive."
+    },
+
+    "akiec": {
+        "name": "Actinic Keratosis",
+        "type": "🟠 Pre-cancer",
+        "symptoms": ["Rough scaly patch", "Sun damage", "Dry crusted lesion"],
+        "advice": "⚠️ Can become cancer. Dermatologist check needed."
+    },
+
+    "bkl": {
+        "name": "Benign Keratosis",
+        "type": "🟢 Benign",
+        "symptoms": ["Warty lesion", "Brown patch", "Rough skin"],
+        "advice": "Harmless condition. Monitor changes."
+    },
+
+    "df": {
+        "name": "Dermatofibroma",
+        "type": "🟢 Benign",
+        "symptoms": ["Hard bump", "Brown spot", "Firm nodule"],
+        "advice": "No treatment needed unless painful."
+    },
+
+    "vasc": {
+        "name": "Vascular Lesion",
+        "type": "🟢 Usually Benign",
+        "symptoms": ["Red/blue spots", "Blood vessel marks"],
+        "advice": "Usually harmless. Check if growing."
+    }
+}
+
+# ------------------------
+# IMAGE PREPROCESSING
+#------------------------
 def process_image(img_file):
 
     image = Image.open(img_file).convert("RGB")
@@ -83,9 +140,10 @@ def process_image(img_file):
 
     return label, confidence
 
-# =====================================================
-# GRAD-CAM CLASS
-# =====================================================
+
+#------------------------
+# GRAD-CAM
+# ------------------------
 class GradCAM:
     def __init__(self, model, target_layer):
         self.model = model
@@ -125,15 +183,28 @@ class GradCAM:
 
         return heatmap
 
-# =====================================================
-# GRAD-CAM PREDICTION FUNCTION
-# =====================================================
+
+# ------------------------
+# GET DISEASE INFO
+# ------------------------
+def get_disease_info(label):
+    return SKIN_KNOWLEDGE.get(label, {
+        "name": "Unknown Disease",
+        "type": "⚠️ Not Found",
+        "symptoms": ["No data available"],
+        "advice": "Consult dermatologist."
+    })
+
+
+#------------------------
+# FINAL IMAGE PIPELINE (UPDATED)
+# ------------------------
 def process_image_with_gradcam(img_file):
 
     image_pil = Image.open(img_file).convert("RGB")
     image = transform(image_pil).unsqueeze(0).to(device)
 
-    # Forward pass
+    # prediction
     outputs = model(image)
     probs = torch.softmax(outputs, dim=1)
 
@@ -141,11 +212,10 @@ def process_image_with_gradcam(img_file):
     confidence = probs[0][pred].item()
     label = str(labels[pred])
 
-    # -------- Grad-CAM --------
+    # Grad-CAM
     cam = GradCAM(model, model.blocks[-1])
     heatmap = cam.generate(image, class_idx=pred)
 
-    # Convert heatmap to image
     heatmap = cv2.resize(heatmap, (224, 224))
     heatmap = np.uint8(255 * heatmap)
     heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
@@ -153,4 +223,12 @@ def process_image_with_gradcam(img_file):
     img_np = np.array(image_pil.resize((224, 224)))
     superimposed = cv2.addWeighted(img_np, 0.6, heatmap, 0.4, 0)
 
-    return label, confidence, superimposed 
+    # 🧠 RULE-BASED INFO
+    disease_info = get_disease_info(label)
+
+    return {
+        "label": label,
+        "confidence": confidence,
+        "image": superimposed,
+        "disease_info": disease_info
+    }

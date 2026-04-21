@@ -8,6 +8,10 @@ import pandas as pd
 import os, sys
 from PIL import Image
 import numpy as np
+try:
+    import cv2
+except Exception:
+    cv2 = None
 
 #------------------------
 # RESOURCE PATH (for deployment safety)

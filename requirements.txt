@@ -1,13 +1,9 @@
 streamlit
-torch
-torchvision
-torchaudio
-timm
 numpy
 pandas
 opencv-python-headless
 Pillow
 scikit-learn
 SpeechRecognition
-pocketsphinx
 python-dotenv
+timm

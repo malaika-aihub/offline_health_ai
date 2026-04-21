@@ -59,18 +59,6 @@ transform = transforms.Compose([
 ])
 
 # ------------------------
-# DATASET (optional)
-#------------------------
-df = pd.read_csv("data/raw/HAM10000_metadata.csv")
-
-def get_true_label(image_id):
-    match = df[df['image_id'] == image_id]
-    if not match.empty:
-        return match['dx'].values[0]
-    return None
-
-
-# ------------------------
 # 🧠 DISEASE KNOWLEDGE BASE (RULE LAYER)
 # ------------------------
 SKIN_KNOWLEDGE = {

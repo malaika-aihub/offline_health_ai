@@ -8,10 +8,6 @@ from text_utils import process_text
 from voice_utils import voice_to_text
 from image_utils import process_image_with_gradcam
 
-# ------------------------
-# LOAD DATASET
-# ------------------------
-df = pd.read_csv("data/raw/HAM10000_metadata.csv")
 
 #------------------------
 # PAGE CONFIG
@@ -146,19 +142,6 @@ if st.session_state.page == "photo":
             confidence = result["confidence"]
             cam_image = result["image"]
             info = result["disease_info"]
-
-            #  ------------------------
-            # dataset match (optional ground truth)
-            #  ------------------------
-            img_name = os.path.splitext(img_file.name)[0].strip()
-
-            match = df[df['image_id'] == img_name]
-
-            if not match.empty:
-                true_label = match['dx'].values[0]
-                st.success(f"Actual Label: {true_label}")
-            else:
-                st.info("ℹ No ground truth available (external image)")
 
             #  ------------------------
             # prediction output

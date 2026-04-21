@@ -6,10 +6,8 @@ from PIL import Image
 from torchvision import transforms
 import pandas as pd
 import os, sys
-try:
-    import cv2
-except Exception:
-    cv2 = None
+from torchcam.methods import GradCAM
+from torchcam.utils import overlay_mask
 
 #------------------------
 # RESOURCE PATH (for deployment safety)
@@ -133,63 +131,6 @@ def process_image(img_file):
 
 
 #------------------------
-# GRAD-CAM
-# ------------------------
-class GradCAM:
-    def __init__(self, model, target_layer):
-        self.model = model
-        self.target_layer = target_layer
-        self.gradients = None
-        self.activations = None
-
-        target_layer.register_forward_hook(self.save_activation)
-        target_layer.register_full_backward_hook(self.save_gradient)
-
-    def save_activation(self, module, input, output):
-        self.activations = output
-
-    def save_gradient(self, module, grad_in, grad_out):
-        self.gradients = grad_out[0]
-
-    def generate(self, x, class_idx):
-        output = self.model(x)
-
-        self.model.zero_grad()
-        loss = output[0, class_idx]
-        loss.backward()
-
-        gradients = self.gradients
-        activations = self.activations
-
-        pooled_gradients = torch.mean(gradients, dim=[0, 2, 3])
-
-        for i in range(activations.shape[1]):
-            activations[:, i, :, :] *= pooled_gradients[i]
-
-        heatmap = torch.mean(activations, dim=1).squeeze()
-        heatmap = np.maximum(heatmap.detach().cpu().numpy(), 0)
-
-        if np.max(heatmap) != 0:
-            heatmap /= np.max(heatmap)
-
-        return heatmap
-
-
-# ------------------------
-# GET DISEASE INFO
-# ------------------------
-def get_disease_info(label):
-    return SKIN_KNOWLEDGE.get(label, {
-        "name": "Unknown Disease",
-        "type": "⚠️ Not Found",
-        "symptoms": ["No data available"],
-        "advice": "Consult dermatologist."
-    })
-
-
-#------------------------
-# FINAL IMAGE PIPELINE (UPDATED)
-# ------------------------
 def process_image_with_gradcam(img_file):
 
     image_pil = Image.open(img_file).convert("RGB")
@@ -203,23 +144,56 @@ def process_image_with_gradcam(img_file):
     confidence = probs[0][pred].item()
     label = str(labels[pred])
 
-    # Grad-CAM
-    cam = GradCAM(model, model.blocks[-1])
-    heatmap = cam.generate(image, class_idx=pred)
+    # Grad-CAM using torchcam
+    cam_extractor = GradCAM(model, target_layer=model.blocks[-1])
 
-    heatmap = cv2.resize(heatmap, (224, 224))
-    heatmap = np.uint8(255 * heatmap)
-    heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+    activation_map = cam_extractor(pred, outputs)
 
-    img_np = np.array(image_pil.resize((224, 224)))
-    superimposed = cv2.addWeighted(img_np, 0.6, heatmap, 0.4, 0)
+    result_img = overlay_mask(image_pil, activation_map[0], alpha=0.5)
 
-    # 🧠 RULE-BASED INFO
     disease_info = get_disease_info(label)
 
     return {
         "label": label,
         "confidence": confidence,
-        "image": superimposed,
+        "image": result_img,
+        "disease_info": disease_info
+    }
+
+# ------------------------
+# GET DISEASE INFO
+# ------------------------
+def get_disease_info(label):
+    return SKIN_KNOWLEDGE.get(label, {
+        "name": "Unknown Disease",
+        "type": "⚠️ Not Found",
+        "symptoms": ["No data available"],
+        "advice": "Consult dermatologist."
+    })
+
+
+def process_image_with_gradcam(img_file):
+
+    image_pil = Image.open(img_file).convert("RGB")
+    image = transform(image_pil).unsqueeze(0).to(device)
+
+    outputs = model(image)
+    probs = torch.softmax(outputs, dim=1)
+
+    pred = torch.argmax(probs, dim=1).item()
+    confidence = probs[0][pred].item()
+    label = str(labels[pred])
+
+    cam_extractor = GradCAM(model, target_layer=model.blocks[-1])
+    activation_map = cam_extractor(pred, outputs)
+
+    result_img = overlay_mask(image_pil, activation_map[0], alpha=0.5)
+
+    disease_info = get_disease_info(label)
+
+    return {
+        "label": label,
+        "confidence": confidence,
+        "image": result_img,
         "disease_info": disease_info
     }

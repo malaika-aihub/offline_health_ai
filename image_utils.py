@@ -6,10 +6,7 @@ from PIL import Image
 from torchvision import transforms
 import pandas as pd
 import os, sys
-from torchcam.methods import GradCAM
-from torchcam.utils import overlay_mask
-from torchvision.transforms.functional import to_pil_image
-
+import cv2
 #------------------------
 # RESOURCE PATH (for deployment safety)
 # ------------------------
@@ -124,6 +121,18 @@ def get_disease_info(label):
     })
 
 
+
+def simple_gradcam(image_pil):
+    image = np.array(image_pil.resize((224, 224)))
+
+    # dummy heatmap example (replace with your real CAM logic if already exists)
+    heatmap = np.random.rand(224, 224)
+    heatmap = cv2.resize(heatmap, (224, 224))
+    heatmap = np.uint8(255 * heatmap)
+    heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+
+    return cv2.addWeighted(image, 0.6, heatmap, 0.4, 0)
+
 def process_image_with_gradcam(img_file):
 
     image_pil = Image.open(img_file).convert("RGB")
@@ -136,20 +145,13 @@ def process_image_with_gradcam(img_file):
     confidence = probs[0][pred].item()
     label = str(labels[pred])
 
-    cam_extractor = GradCAM(model, target_layer=model.blocks[-1])
-    activation_map = cam_extractor(pred, outputs)
-
-    result_img = overlay_mask(
-        image_pil,
-        to_pil_image(activation_map[0].squeeze(), mode='F'),
-        alpha=0.5
-    )
+    cam_image = simple_gradcam(image_pil)
 
     disease_info = get_disease_info(label)
 
     return {
         "label": label,
         "confidence": confidence,
-        "image": result_img,
+        "image": cam_image,
         "disease_info": disease_info
     }

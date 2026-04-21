@@ -9,4 +9,4 @@ python-dotenv
 timm
 torch
 torchvision
-torchcam
+opencv-python-headless==4.8.1.78

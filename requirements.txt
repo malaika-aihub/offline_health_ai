@@ -1,9 +1,10 @@
 streamlit
 numpy
 pandas
-opencv-python-headless
 Pillow
 scikit-learn
 SpeechRecognition
+pocketsphinx
 python-dotenv
 timm
+opencv-python-headless

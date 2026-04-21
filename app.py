@@ -64,6 +64,15 @@ For best results, upload a **clear skin image** for visual diagnosis.
 # TEXT PAGE
 # ------------------------
 if st.session_state.page == "text":
+
+    st.markdown("""
+    <style>
+    div[data-baseweb="textarea"] textarea {
+        resize: none !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     st.header("✍️ Text Input")
 
     user_text = st.text_area("Enter your symptoms:", height=150)
@@ -81,7 +90,6 @@ if st.session_state.page == "text":
 
     if st.button("⬅ Back"):
         go_to_page("home")
-
 
 # ------------------------
 # VOICE PAGE

@@ -5,7 +5,7 @@ torchaudio
 timm
 numpy
 pandas
-opencv-python
+opencv-python-headless
 Pillow
 scikit-learn
 SpeechRecognition

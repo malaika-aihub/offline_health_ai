@@ -8,6 +8,7 @@ import pandas as pd
 import os, sys
 from torchcam.methods import GradCAM
 from torchcam.utils import overlay_mask
+from torchvision.transforms.functional import to_pil_image
 
 #------------------------
 # RESOURCE PATH (for deployment safety)
@@ -110,55 +111,6 @@ SKIN_KNOWLEDGE = {
     }
 }
 
-# ------------------------
-# IMAGE PREPROCESSING
-#------------------------
-def process_image(img_file):
-
-    image = Image.open(img_file).convert("RGB")
-    image = transform(image).unsqueeze(0).to(device)
-
-    with torch.no_grad():
-        outputs = model(image)
-        probs = torch.softmax(outputs, dim=1)
-
-        pred = torch.argmax(probs, dim=1).item()
-        confidence = probs[0][pred].item()
-
-    label = str(labels[pred])
-
-    return label, confidence
-
-
-#------------------------
-def process_image_with_gradcam(img_file):
-
-    image_pil = Image.open(img_file).convert("RGB")
-    image = transform(image_pil).unsqueeze(0).to(device)
-
-    # prediction
-    outputs = model(image)
-    probs = torch.softmax(outputs, dim=1)
-
-    pred = torch.argmax(probs, dim=1).item()
-    confidence = probs[0][pred].item()
-    label = str(labels[pred])
-
-    # Grad-CAM using torchcam
-    cam_extractor = GradCAM(model, target_layer=model.blocks[-1])
-
-    activation_map = cam_extractor(pred, outputs)
-
-    result_img = overlay_mask(image_pil, activation_map[0], alpha=0.5)
-
-    disease_info = get_disease_info(label)
-
-    return {
-        "label": label,
-        "confidence": confidence,
-        "image": result_img,
-        "disease_info": disease_info
-    }
 
 # ------------------------
 # GET DISEASE INFO
@@ -187,7 +139,11 @@ def process_image_with_gradcam(img_file):
     cam_extractor = GradCAM(model, target_layer=model.blocks[-1])
     activation_map = cam_extractor(pred, outputs)
 
-    result_img = overlay_mask(image_pil, activation_map[0], alpha=0.5)
+    result_img = overlay_mask(
+        image_pil,
+        to_pil_image(activation_map[0].squeeze(), mode='F'),
+        alpha=0.5
+    )
 
     disease_info = get_disease_info(label)
 

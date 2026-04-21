@@ -17,7 +17,7 @@ An AI-powered offline healthcare assistant designed to help users analyze skin c
 
  Voice Input (Optional):
 
-* Converts speech → text using Whisper
+* Converts speech → text using SpeechRecognition (Google Web API)
 * Detects whether input is skin-related
 
 ---
@@ -25,19 +25,6 @@ An AI-powered offline healthcare assistant designed to help users analyze skin c
  Text Input (Optional):
 
 * User can describe symptoms manually
-* Processed using lightweight logic
-
----
-
-###  AI Safety Assistant (Gemma 4)
-
-* Does NOT diagnose disease
-* Provides:
-
-  * Possible cause (safe hint)
-  * Safety precautions
-  * Basic advice
-* Encourages user to upload image for better analysis
 
 ---
 
@@ -69,19 +56,7 @@ https://creativecommons.org/licenses/by-nc-sa/4.0/
 * PyTorch
 * EfficientNet (via timm)
 * OpenCV (Grad-CAM)
-* Whisper (speech-to-text)
-* Transformers (Gemma 4)
 * Streamlit (UI)
-
----
-
-##  How It Works
-
-1. User uploads skin image
-2. Model predicts disease class
-3. Confidence score calculated
-4. Grad-CAM highlights affected area
-5. Gemma provides safety guidance
 
 ---
 
@@ -93,7 +68,7 @@ https://creativecommons.org/licenses/by-nc-sa/4.0/
 
 ---
 
- Hackathon Goal:
+ Goal:
 
 To build an **offline-capable AI health assistant** that:
 
@@ -103,7 +78,6 @@ To build an **offline-capable AI health assistant** that:
 
 ---
 
-Developed as part of the **Gemma 4 Good Hackathon**
 Focused on real-world healthcare accessibility using AI.
 
 ---

@@ -2,11 +2,12 @@
 import torch
 import timm
 import numpy as np
-import cv2
 from PIL import Image
 from torchvision import transforms
 import pandas as pd
 import os, sys
+from PIL import Image
+import numpy as np
 
 #------------------------
 # RESOURCE PATH (for deployment safety)

@@ -124,6 +124,13 @@ if st.session_state.page == "voice":
             st.write(text)
 
             st.success("🧠 Medical Analysis:")
+            # placeholder box
+            placeholder = st.empty()
+            # loading animation (dots)
+            for i in range(6):
+                placeholder.markdown("🧠 Analyzing" + "." * (i % 4))
+                time.sleep(0.4)
+            result = process_text(text)
             result = process_text(text)
             st.write(result)
 

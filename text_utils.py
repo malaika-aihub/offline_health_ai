@@ -7,9 +7,10 @@ from dotenv import load_dotenv
 # ------------------------
 # LOAD ENV
 # ------------------------
-load_dotenv()
 
-HF_TOKEN = st.secrets.get("HF_TOKEN") or os.getenv("HF_TOKEN")
+
+HF_TOKEN = st.secrets.get("HF_TOKEN") 
+
 
 if not HF_TOKEN:
     raise ValueError("HF_TOKEN not found in .env file")

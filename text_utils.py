@@ -13,11 +13,13 @@ HF_TOKEN = st.secrets.get("HF_TOKEN")
 
 
 if not HF_TOKEN:
-    raise ValueError("HF_TOKEN not found in .env file")
+    st.error("HF_TOKEN missing in Streamlit Secrets")
+    st.stop()
 
 HEADERS = {
     "Authorization": f"Bearer {HF_TOKEN}"
 }
+
 
 #  ONLY GEMMA 4 MODEL (rule)
 MODEL_NAME = "google/gemma-4-E2B-it"

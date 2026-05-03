@@ -52,19 +52,25 @@ https://creativecommons.org/licenses/by-nc-sa/4.0/
 
 ## Tech Stack
 
+## Tech Stack
+
 * Python
 * PyTorch
 * EfficientNet (via timm)
 * OpenCV (Grad-CAM)
 * Streamlit (UI)
+* Hugging Face Inference API (Gemma 4)
+* Rule-based AI Engine (Fallback System)
+* SpeechRecognition (Voice Input)
 
 ---
 
- Disclaimer
+## Important Disclaimer
 
-* This system is **NOT a medical diagnosis tool**
-* It is designed for **educational and assistive purposes only**
-* Always consult a qualified medical professional for serious conditions
+* This system is not a medical diagnosis tool.
+* It is designed for educational, assistive, and awareness purposes only.
+* It provides AI-assisted insights and should not replace professional medical advice.
+* Always consult a qualified healthcare professional for any serious or persistent conditions.
 
 ---
 
